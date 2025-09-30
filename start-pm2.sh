@@ -13,6 +13,69 @@ echo "🧹 Cleaning previous PM2 processes..."
 pm2 delete wms-app 2>/dev/null || echo "No previous process to clean"
 
 echo "📦 Building application..."
+
+# Ensure client directory structure exists
+echo "🔧 Ensuring client directory structure exists..."
+mkdir -p client/public
+mkdir -p client/src
+
+# Check if client/package.json exists
+if [ ! -f "client/package.json" ]; then
+    echo "❌ client/package.json not found. Please ensure the client directory is properly uploaded."
+    exit 1
+fi
+
+# Create index.html if it doesn't exist
+if [ ! -f "client/public/index.html" ]; then
+    echo "📝 Creating missing index.html file..."
+    cat > client/public/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Warehouse Management System"
+    />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <title>WMS - Warehouse Management System</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+EOF
+fi
+
+# Create manifest.json if it doesn't exist
+if [ ! -f "client/public/manifest.json" ]; then
+    echo "📝 Creating missing manifest.json file..."
+    cat > client/public/manifest.json << 'EOF'
+{
+  "short_name": "WMS",
+  "name": "Warehouse Management System",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}
+EOF
+fi
+
+echo "✅ Client public files verified/created"
+
 npm run build
 
 if [ $? -eq 0 ]; then
