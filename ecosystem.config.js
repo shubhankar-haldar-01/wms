@@ -27,6 +27,8 @@ module.exports = {
         REDIS_PORT: 6379,
         REDIS_PASSWORD: '',
         REDIS_CACHE_TTL: 3600,
+        VPS_DOMAIN: 'http://localhost:5001',
+        CLIENT_URL: 'http://localhost:5001',
       },
     },
   ],

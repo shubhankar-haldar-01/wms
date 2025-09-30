@@ -28,6 +28,12 @@ const corsOptions = {
     // Allow requests with no origin (mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
 
+    // In production, be more permissive for VPS deployment
+    if (process.env.NODE_ENV === "production") {
+      console.log("CORS: Production mode - allowing origin:", origin);
+      return callback(null, true);
+    }
+
     const allowedOrigins = [
       process.env.CLIENT_URL || "http://localhost:3000",
       "http://localhost:3000",
@@ -36,13 +42,26 @@ const corsOptions = {
       "https://localhost:5001",
       // Add your VPS domain here
       process.env.VPS_DOMAIN || "https://your-vps-domain.com",
+      // Add common VPS patterns
+      "http://localhost",
+      "https://localhost",
+      "http://127.0.0.1:3000",
+      "https://127.0.0.1:3000",
+      "http://127.0.0.1:5001",
+      "https://127.0.0.1:5001",
     ];
 
+    // Log all origins for debugging
+    console.log("CORS checking origin:", origin);
+    console.log("Allowed origins:", allowedOrigins);
+
     if (allowedOrigins.includes(origin)) {
+      console.log("CORS: Origin allowed");
       callback(null, true);
     } else {
       // Log the rejected origin for debugging
       console.log("CORS rejected origin:", origin);
+      console.log("CORS: Please add this origin to allowedOrigins array");
       callback(new Error("Not allowed by CORS"));
     }
   },
