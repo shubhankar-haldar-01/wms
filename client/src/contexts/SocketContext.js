@@ -1,14 +1,14 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { io } from "socket.io-client";
-import { useAuth } from "./AuthContext";
-import toast from "react-hot-toast";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { io } from 'socket.io-client';
+import { useAuth } from './AuthContext';
+import toast from 'react-hot-toast';
 
 const SocketContext = createContext();
 
 export const useSocket = () => {
   const context = useContext(SocketContext);
   if (!context) {
-    throw new Error("useSocket must be used within a SocketProvider");
+    throw new Error('useSocket must be used within a SocketProvider');
   }
   return context;
 };
@@ -22,94 +22,127 @@ export const SocketProvider = ({ children }) => {
     if (user) {
       // Initialize socket connection
       const newSocket = io(
-        process.env.REACT_APP_SERVER_URL || "http://localhost:5001",
+        process.env.REACT_APP_SERVER_URL || 'http://localhost:5001',
         {
           auth: {
             userId: user.id,
             username: user.username,
           },
-        }
+          // Add connection options for better stability
+          transports: ['websocket', 'polling'],
+          upgrade: true,
+          rememberUpgrade: true,
+          timeout: 20000,
+          forceNew: true,
+          reconnection: true,
+          reconnectionDelay: 1000,
+          reconnectionAttempts: 5,
+          maxReconnectionAttempts: 5,
+        },
       );
 
-      newSocket.on("connect", () => {
-        console.log("Connected to server");
+      newSocket.on('connect', () => {
+        console.log('Connected to server');
         setConnected(true);
 
         // Join user-specific room
-        newSocket.emit("join_room", `user_${user.id}`);
+        newSocket.emit('join_room', `user_${user.id}`);
 
         // Join general notifications room
-        newSocket.emit("join_room", "general");
+        newSocket.emit('join_room', 'general');
       });
 
-      newSocket.on("disconnect", () => {
-        console.log("Disconnected from server");
+      newSocket.on('disconnect', (reason) => {
+        console.log('Disconnected from server:', reason);
+        setConnected(false);
+      });
+
+      newSocket.on('connect_error', (error) => {
+        console.error('Socket connection error:', error);
+        setConnected(false);
+      });
+
+      newSocket.on('reconnect', (attemptNumber) => {
+        console.log('Reconnected to server after', attemptNumber, 'attempts');
+        setConnected(true);
+      });
+
+      newSocket.on('reconnect_attempt', (attemptNumber) => {
+        console.log('Reconnection attempt:', attemptNumber);
+      });
+
+      newSocket.on('reconnect_error', (error) => {
+        console.error('Reconnection error:', error);
+      });
+
+      newSocket.on('reconnect_failed', () => {
+        console.error('Failed to reconnect to server');
         setConnected(false);
       });
 
       // Real-time event handlers
-      newSocket.on("product_created", (product) => {
+      newSocket.on('product_created', (product) => {
         toast.success(`New product created: ${product.name}`);
         window.dispatchEvent(
-          new CustomEvent("productCreated", { detail: product })
+          new CustomEvent('productCreated', { detail: product }),
         );
       });
 
-      newSocket.on("product_updated", (product) => {
+      newSocket.on('product_updated', (product) => {
         toast.success(`Product updated: ${product.name}`);
         window.dispatchEvent(
-          new CustomEvent("productUpdated", { detail: product })
+          new CustomEvent('productUpdated', { detail: product }),
         );
       });
 
-      newSocket.on("product_deleted", (data) => {
-        toast.success("Product deleted successfully");
+      newSocket.on('product_deleted', (data) => {
+        toast.success('Product deleted successfully');
         window.dispatchEvent(
-          new CustomEvent("productDeleted", { detail: data })
+          new CustomEvent('productDeleted', { detail: data }),
         );
       });
 
-      newSocket.on("barcode_created", (barcode) => {
+      newSocket.on('barcode_created', (barcode) => {
         toast.success(`New barcode created: ${barcode.barcode}`);
         window.dispatchEvent(
-          new CustomEvent("barcodeCreated", { detail: barcode })
+          new CustomEvent('barcodeCreated', { detail: barcode }),
         );
       });
 
-      newSocket.on("barcodes_generated", (data) => {
+      newSocket.on('barcodes_generated', (data) => {
         toast.success(`${data.quantity} barcodes generated for product`);
         window.dispatchEvent(
-          new CustomEvent("barcodesGenerated", { detail: data })
+          new CustomEvent('barcodesGenerated', { detail: data }),
         );
       });
 
-      newSocket.on("transaction_created", (data) => {
+      newSocket.on('transaction_created', (data) => {
         const { transaction } = data;
         toast.success(
           `${transaction.transaction_type} transaction: ${transaction.quantity} units of ${transaction.product_name}`,
-          { duration: 3000 }
+          { duration: 3000 },
         );
         window.dispatchEvent(
-          new CustomEvent("transactionCreated", { detail: data })
+          new CustomEvent('transactionCreated', { detail: data }),
         );
       });
 
-      newSocket.on("stock_updated", (data) => {
+      newSocket.on('stock_updated', (data) => {
         // This could trigger a refetch of stock data in components
         // Emit a custom event that components can listen to
-        window.dispatchEvent(new CustomEvent("stockUpdated", { detail: data }));
+        window.dispatchEvent(new CustomEvent('stockUpdated', { detail: data }));
       });
 
-      newSocket.on("new_low_stock_alerts", (alerts) => {
+      newSocket.on('new_low_stock_alerts', (alerts) => {
         alerts.forEach((alert) => {
           toast.error(
             `Low stock alert: ${alert.product_name} (${alert.current_stock} remaining)`,
-            { duration: 6000 }
+            { duration: 6000 },
           );
         });
       });
 
-      newSocket.on("alerts_resolved", (alerts) => {
+      newSocket.on('alerts_resolved', (alerts) => {
         toast.success(`${alerts.length} alert(s) resolved`);
       });
 

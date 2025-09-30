@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -27,7 +27,7 @@ import {
   Alert,
   LinearProgress,
   Pagination,
-} from "@mui/material";
+} from '@mui/material';
 import {
   Search,
   Refresh,
@@ -37,14 +37,14 @@ import {
   Print,
   PrintOutlined,
   QrCode,
-} from "@mui/icons-material";
-import { useQuery, useMutation, useQueryClient } from "react-query";
-import axios from "axios";
-import { format } from "date-fns";
-import toast from "react-hot-toast";
-import JsBarcode from "jsbarcode";
-import LoadingSpinner from "../components/Common/LoadingSpinner";
-import { useAuth } from "../contexts/AuthContext";
+} from '@mui/icons-material';
+import { useQuery, useMutation, useQueryClient } from 'react-query';
+import axios from 'axios';
+import { format } from 'date-fns';
+import toast from 'react-hot-toast';
+import JsBarcode from 'jsbarcode';
+import LoadingSpinner from '../components/Common/LoadingSpinner';
+import { useAuth } from '../contexts/AuthContext';
 
 const BarcodeGenerationDialog = ({
   open,
@@ -63,13 +63,13 @@ const BarcodeGenerationDialog = ({
     error: productsError,
     refetch,
   } = useQuery(
-    "products",
-    () => axios.get("/api/products?limit=1000").then((res) => res.data),
+    'products',
+    () => axios.get('/api/products?limit=1000').then((res) => res.data),
     {
       enabled: open, // Only fetch when dialog is open
       staleTime: 0, // Always consider data stale
       refetchOnWindowFocus: false, // Prevent unnecessary refetches
-    }
+    },
   );
 
   const products = productsData?.data?.products || [];
@@ -83,27 +83,27 @@ const BarcodeGenerationDialog = ({
 
   const generateBarcodesMutation = useMutation(
     (data) =>
-      axios.post("/api/barcodes/generate", data, {
+      axios.post('/api/barcodes/generate', data, {
         timeout: 120000, // 2 minutes timeout for barcode generation
       }),
     {
       onSuccess: (response) => {
         const generatedCount =
           response.data.data.quantity || response.data.data.generated_count;
-        const productName = selectedProduct?.name || "Unknown Product";
+        const productName = selectedProduct?.name || 'Unknown Product';
 
         toast.success(
-          `Successfully generated ${generatedCount} barcodes for ${productName}. Opening print dialog...`
+          `Successfully generated ${generatedCount} barcodes for ${productName}. Opening print dialog...`,
         );
 
         // Invalidate all products queries to refresh the dropdown and products page
-        queryClient.invalidateQueries("products");
-        queryClient.invalidateQueries(["products"]);
-        queryClient.invalidateQueries("products-filter");
+        queryClient.invalidateQueries('products');
+        queryClient.invalidateQueries(['products']);
+        queryClient.invalidateQueries('products-filter');
         // Invalidate all products queries with any parameters using a predicate
         queryClient.invalidateQueries({
           predicate: (query) => {
-            return query.queryKey[0] === "products";
+            return query.queryKey[0] === 'products';
           },
         });
 
@@ -115,8 +115,8 @@ const BarcodeGenerationDialog = ({
         // Trigger print dialog with generated barcodes after a short delay
         if (onPrintGenerated && response.data.data.barcodes) {
           console.log(
-            "Triggering print for generated barcodes:",
-            response.data.data.barcodes.length
+            'Triggering print for generated barcodes:',
+            response.data.data.barcodes.length,
           );
           setTimeout(() => {
             onPrintGenerated(response.data.data.barcodes, selectedProduct);
@@ -126,34 +126,34 @@ const BarcodeGenerationDialog = ({
         onSuccess();
       },
       onError: (error) => {
-        console.error("Barcode generation error:", error);
-        if (error.code === "ECONNABORTED") {
+        console.error('Barcode generation error:', error);
+        if (error.code === 'ECONNABORTED') {
           toast.error(
-            "Barcode generation timed out. Please try with a smaller quantity."
+            'Barcode generation timed out. Please try with a smaller quantity.',
           );
         } else if (error.response?.status === 401) {
-          toast.error("Session expired. Please login again.");
+          toast.error('Session expired. Please login again.');
         } else {
           toast.error(
             error.response?.data?.error ||
               error.response?.data?.message ||
-              "Failed to generate barcodes"
+              'Failed to generate barcodes',
           );
         }
       },
-    }
+    },
   );
 
   const handleGenerate = () => {
     if (!selectedProduct || quantity < 1) {
-      toast.error("Please select a product and specify quantity");
+      toast.error('Please select a product and specify quantity');
       return;
     }
 
     const requestedQuantity = parseInt(quantity);
 
     if (requestedQuantity > 1000) {
-      toast.error("Maximum 1000 barcodes can be generated at once");
+      toast.error('Maximum 1000 barcodes can be generated at once');
       return;
     }
 
@@ -171,7 +171,7 @@ const BarcodeGenerationDialog = ({
           <FormControl fullWidth>
             <InputLabel>Select Product</InputLabel>
             <Select
-              value={selectedProduct ? selectedProduct.id : ""}
+              value={selectedProduct ? selectedProduct.id : ''}
               onChange={(e) => {
                 const product = products.find((p) => p.id === e.target.value);
                 setSelectedProduct(product || null);
@@ -249,8 +249,8 @@ const BarcodeGenerationDialog = ({
           }
         >
           {generateBarcodesMutation.isLoading
-            ? "Generating..."
-            : `Generate ${quantity} Barcode${quantity > 1 ? "s" : ""}`}
+            ? 'Generating...'
+            : `Generate ${quantity} Barcode${quantity > 1 ? 's' : ''}`}
         </Button>
       </DialogActions>
     </Dialog>
@@ -266,43 +266,43 @@ const BarcodePrintDialog = ({
   autoPrint = false,
   directPrint = false,
 }) => {
-  const [printFormat, setPrintFormat] = useState("thermal");
+  const [printFormat, setPrintFormat] = useState('thermal');
   const [copies, setCopies] = useState(1);
   const hasPrintedRef = useRef(false);
 
   const generateBarcodeSVG = (barcodeNumber) => {
-    const canvas = document.createElement("canvas");
+    const canvas = document.createElement('canvas');
 
     try {
       JsBarcode(canvas, barcodeNumber, {
-        format: "CODE128",
+        format: 'CODE128',
         width: 2, // Reduced for 50mm width
         height: 30, // Optimized for 25mm thermal label
         displayValue: false, // Don't show barcode number in image since we show it separately
         margin: 0,
       });
-      return canvas.toDataURL("image/png");
+      return canvas.toDataURL('image/png');
     } catch (error) {
-      console.error("Barcode generation error:", error);
+      console.error('Barcode generation error:', error);
       return null;
     }
   };
 
   // Direct print function - server-side printing
   const handleDirectPrint = useCallback(async () => {
-    console.log("Direct printing", barcodes.length, "barcodes");
+    console.log('Direct printing', barcodes.length, 'barcodes');
     console.log(
-      "Barcodes to print:",
-      barcodes.map((b) => b.barcode)
+      'Barcodes to print:',
+      barcodes.map((b) => b.barcode),
     );
-    console.log("directPrint prop:", directPrint);
+    console.log('directPrint prop:', directPrint);
 
     try {
       // Send all barcodes in a single request for better performance
-      const response = await fetch("/api/direct-print/print-barcodes", {
-        method: "POST",
+      const response = await fetch('/api/direct-print/print-barcodes', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           productId: product?.id,
@@ -312,21 +312,33 @@ const BarcodePrintDialog = ({
       });
 
       const result = await response.json();
+      console.log('Print response:', result);
 
       if (result.success) {
-        toast.success(`${barcodes.length} barcode(s) printed successfully`);
+        if (result.vpsMode) {
+          toast.success(`${barcodes.length} barcode(s) generated as PDF`);
+          // Optionally download the PDF
+          if (result.filename) {
+            const link = document.createElement('a');
+            link.href = `/uploads/pdfs/${result.filename}`;
+            link.download = result.filename;
+            link.click();
+          }
+        } else {
+          toast.success(`${barcodes.length} barcode(s) printed successfully`);
+        }
         onClose();
       } else {
-        toast.error(result.error || "Failed to print barcodes");
+        toast.error(result.error || 'Failed to print barcodes');
       }
     } catch (error) {
-      console.error("Direct print error:", error);
-      toast.error("Failed to print barcodes. Please try again.");
+      console.error('Direct print error:', error);
+      toast.error('Failed to print barcodes. Please try again.');
     }
   }, [barcodes, product, onClose, directPrint]);
 
   const handlePrint = useCallback(() => {
-    console.log("Starting print process for", barcodes.length, "barcodes");
+    console.log('Starting print process for', barcodes.length, 'barcodes');
 
     // For direct print, try to print without opening a new window
     if (directPrint) {
@@ -334,17 +346,17 @@ const BarcodePrintDialog = ({
       return;
     }
 
-    const printWindow = window.open("", "_blank");
+    const printWindow = window.open('', '_blank');
 
     if (!printWindow) {
-      console.error("Failed to open print window - popup blocked?");
-      toast.error("Print window blocked. Please allow popups and try again.");
+      console.error('Failed to open print window - popup blocked?');
+      toast.error('Print window blocked. Please allow popups and try again.');
       return;
     }
 
-    let printContent = "";
+    let printContent = '';
 
-    if (printFormat === "thermal") {
+    if (printFormat === 'thermal') {
       // Thermal printer format (50mm x 25mm)
       printContent = `
         <!DOCTYPE html>
@@ -434,21 +446,21 @@ const BarcodePrintDialog = ({
               return `
               <div class="label">
                 <div class="label-header">
-                  <div class="product-name">${product?.name || "Product"}</div>
-                  <div class="sku">SKU: ${product?.sku || "N/A"}</div>
+                  <div class="product-name">${product?.name || 'Product'}</div>
+                  <div class="sku">SKU: ${product?.sku || 'N/A'}</div>
                 </div>
                 <div class="barcode-section">
                   ${
                     barcodeDataURL
                       ? `<img src="${barcodeDataURL}" alt="Barcode" class="barcode-img" />`
-                      : ""
+                      : ''
                   }
                   <div class="barcode-number">${barcode.barcode}</div>
                 </div>
               </div>
             `;
             })
-            .join("")}
+            .join('')}
         </body>
         </html>
       `;
@@ -512,21 +524,21 @@ const BarcodePrintDialog = ({
               return `
               <div class="label">
                 <div class="label-header">
-                  <div class="product-name">${product?.name || "Product"}</div>
-                  <div class="sku">SKU: ${product?.sku || "N/A"}</div>
+                  <div class="product-name">${product?.name || 'Product'}</div>
+                  <div class="sku">SKU: ${product?.sku || 'N/A'}</div>
                 </div>
                 <div class="barcode-section">
                   ${
                     barcodeDataURL
                       ? `<img src="${barcodeDataURL}" alt="Barcode" class="barcode-img" />`
-                      : ""
+                      : ''
                   }
                   <div class="barcode-number">${barcode.barcode}</div>
                 </div>
               </div>
             `;
             })
-            .join("")}
+            .join('')}
         </body>
         </html>
       `;
@@ -539,7 +551,7 @@ const BarcodePrintDialog = ({
 
       // Wait for content to load before printing
       printWindow.onload = () => {
-        console.log("Print window loaded, triggering print...");
+        console.log('Print window loaded, triggering print...');
         printWindow.print();
 
         // Close window after a short delay
@@ -551,7 +563,7 @@ const BarcodePrintDialog = ({
       // Fallback: print immediately if onload doesn't fire
       setTimeout(() => {
         if (!printWindow.closed) {
-          console.log("Fallback: triggering print after timeout...");
+          console.log('Fallback: triggering print after timeout...');
           printWindow.print();
           setTimeout(() => printWindow.close(), 1000);
         }
@@ -560,8 +572,8 @@ const BarcodePrintDialog = ({
       toast.success(`${barcodes.length} barcode(s) sent to printer`);
       onClose();
     } catch (error) {
-      console.error("Print error:", error);
-      toast.error("Failed to print barcodes. Please try again.");
+      console.error('Print error:', error);
+      toast.error('Failed to print barcodes. Please try again.');
       printWindow.close();
     }
   }, [printFormat, barcodes, product, onClose, directPrint, handleDirectPrint]);
@@ -580,18 +592,18 @@ const BarcodePrintDialog = ({
       // Small delay to ensure dialog is fully loaded
       setTimeout(() => {
         console.log(
-          "Auto-printing barcodes:",
+          'Auto-printing barcodes:',
           barcodes.length,
-          "for product:",
-          product?.name
+          'for product:',
+          product?.name,
         );
-        console.log("directPrint value:", directPrint);
-        console.log("autoPrint value:", autoPrint);
+        console.log('directPrint value:', directPrint);
+        console.log('autoPrint value:', autoPrint);
         if (directPrint) {
-          console.log("Calling handleDirectPrint");
+          console.log('Calling handleDirectPrint');
           handleDirectPrint();
         } else {
-          console.log("Calling handlePrint");
+          console.log('Calling handlePrint');
           handlePrint();
         }
 
@@ -626,9 +638,9 @@ const BarcodePrintDialog = ({
     return (
       <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
         <DialogContent>
-          <Box sx={{ textAlign: "center", py: 4 }}>
+          <Box sx={{ textAlign: 'center', py: 4 }}>
             <LoadingSpinner message="Printing barcodes directly..." />
-            <Typography variant="body2" sx={{ mt: 2, color: "text.secondary" }}>
+            <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
               {barcodes.length} barcode(s) for {product?.name} are being printed
             </Typography>
           </Box>
@@ -640,16 +652,16 @@ const BarcodePrintDialog = ({
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>
-        {autoPrint ? "Auto-Printing Barcodes" : "Print Barcodes"}
+        {autoPrint ? 'Auto-Printing Barcodes' : 'Print Barcodes'}
       </DialogTitle>
       <DialogContent>
         <Box sx={{ mt: 2 }}>
           {autoPrint ? (
-            <Box sx={{ textAlign: "center", py: 2 }}>
+            <Box sx={{ textAlign: 'center', py: 2 }}>
               <LoadingSpinner message="Preparing barcodes for printing..." />
               <Typography
                 variant="body2"
-                sx={{ mt: 2, color: "text.secondary" }}
+                sx={{ mt: 2, color: 'text.secondary' }}
               >
                 {barcodes.length} barcode(s) for {product?.name} will be printed
                 automatically
@@ -689,9 +701,9 @@ const BarcodePrintDialog = ({
 
               <Alert severity="info" sx={{ mt: 2 }}>
                 <Typography variant="body2">
-                  {printFormat === "thermal"
-                    ? "Thermal printer format optimized for 50mm x 25mm thermal labels. Make sure your printer is connected and ready."
-                    : "Standard printer format for A4 paper. Labels will be arranged in a grid layout."}
+                  {printFormat === 'thermal'
+                    ? 'Thermal printer format optimized for 50mm x 25mm thermal labels. Make sure your printer is connected and ready.'
+                    : 'Standard printer format for A4 paper. Labels will be arranged in a grid layout.'}
                 </Typography>
               </Alert>
             </>
@@ -701,7 +713,7 @@ const BarcodePrintDialog = ({
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
         <Button onClick={handlePrint} variant="contained" startIcon={<Print />}>
-          {autoPrint ? "Print Now" : "Print Barcodes"}
+          {autoPrint ? 'Print Now' : 'Print Barcodes'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -710,26 +722,26 @@ const BarcodePrintDialog = ({
 
 // Helper function to generate barcode image for display
 const generateBarcodeImage = (barcodeNumber) => {
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   try {
     JsBarcode(canvas, barcodeNumber, {
-      format: "CODE128",
+      format: 'CODE128',
       width: 2, // Smaller width for UI display
       height: 40, // Smaller height for UI display
       displayValue: true, // Keep displayValue for UI preview
       margin: 2,
       fontSize: 8,
     });
-    return canvas.toDataURL("image/png");
+    return canvas.toDataURL('image/png');
   } catch (error) {
-    console.error("Barcode generation error:", error);
+    console.error('Barcode generation error:', error);
     return null;
   }
 };
 
 const Barcodes = () => {
-  const [search, setSearch] = useState("");
-  const [selectedProduct, setSelectedProduct] = useState("");
+  const [search, setSearch] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState('');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
@@ -750,10 +762,10 @@ const Barcodes = () => {
     isLoading,
     refetch,
   } = useQuery(
-    ["barcodes", search, selectedProduct, page, limit],
+    ['barcodes', search, selectedProduct, page, limit],
     () => {
       return axios
-        .get("/api/barcodes", {
+        .get('/api/barcodes', {
           params: {
             search,
             product_id: selectedProduct,
@@ -765,12 +777,12 @@ const Barcodes = () => {
     },
     {
       keepPreviousData: true,
-    }
+    },
   );
 
   // Get products for filter dropdown
-  const { data: productsData } = useQuery("products", () =>
-    axios.get("/api/products?limit=1000").then((res) => res.data)
+  const { data: productsData } = useQuery('products', () =>
+    axios.get('/api/products?limit=1000').then((res) => res.data),
   );
 
   const barcodes = barcodesData?.data?.barcodes || [];
@@ -781,29 +793,29 @@ const Barcodes = () => {
     (barcodeId) => axios.delete(`/api/barcodes/${barcodeId}`),
     {
       onSuccess: () => {
-        toast.success("Barcode deleted successfully");
-        queryClient.invalidateQueries("barcodes");
+        toast.success('Barcode deleted successfully');
+        queryClient.invalidateQueries('barcodes');
         // Also invalidate products queries to update barcode count
-        queryClient.invalidateQueries("products");
-        queryClient.invalidateQueries(["products"]);
-        queryClient.invalidateQueries("products-filter");
+        queryClient.invalidateQueries('products');
+        queryClient.invalidateQueries(['products']);
+        queryClient.invalidateQueries('products-filter');
         // Invalidate all products queries with any parameters using a predicate
         queryClient.invalidateQueries({
           predicate: (query) => {
-            return query.queryKey[0] === "products";
+            return query.queryKey[0] === 'products';
           },
         });
       },
       onError: (error) => {
         toast.error(
-          error.response?.data?.message || "Failed to delete barcode"
+          error.response?.data?.message || 'Failed to delete barcode',
         );
       },
-    }
+    },
   );
 
   const handleDeleteBarcode = (barcodeId) => {
-    if (window.confirm("Are you sure you want to delete this barcode?")) {
+    if (window.confirm('Are you sure you want to delete this barcode?')) {
       deleteBarcodeMutation.mutate(barcodeId);
     }
   };
@@ -822,7 +834,7 @@ const Barcodes = () => {
       // Print single barcode
       setSelectedBarcodesForPrint([barcode]);
       setSelectedProductForPrint(
-        products.find((p) => p.id === barcode.product_id)
+        products.find((p) => p.id === barcode.product_id),
       );
     } else {
       // Print all filtered barcodes
@@ -857,16 +869,16 @@ const Barcodes = () => {
     <Box>
       <Box
         sx={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
           mb: 3,
         }}
       >
         <Typography variant="h4" component="h1">
           Barcode Management
         </Typography>
-        <Box sx={{ display: "flex", gap: 2 }}>
+        <Box sx={{ display: 'flex', gap: 2 }}>
           {canManageBarcodes && (
             <Button
               variant="contained"
@@ -998,7 +1010,7 @@ const Barcodes = () => {
                   <Typography
                     variant="body2"
                     color={
-                      barcode.product_stock <= 0 ? "error" : "text.primary"
+                      barcode.product_stock <= 0 ? 'error' : 'text.primary'
                     }
                     fontWeight="bold"
                   >
@@ -1006,14 +1018,14 @@ const Barcodes = () => {
                   </Typography>
                 </TableCell>
                 <TableCell>
-                  {format(new Date(barcode.created_at), "MMM dd, yyyy HH:mm")}
+                  {format(new Date(barcode.created_at), 'MMM dd, yyyy HH:mm')}
                 </TableCell>
                 <TableCell align="center">
                   <Box
                     sx={{
-                      display: "flex",
+                      display: 'flex',
                       gap: 0.5,
-                      justifyContent: "center",
+                      justifyContent: 'center',
                     }}
                   >
                     <IconButton
@@ -1061,16 +1073,16 @@ const Barcodes = () => {
       {pagination.pages > 1 && (
         <Box
           sx={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
             mt: 3,
             mb: 2,
           }}
         >
           <Typography variant="body2" color="text.secondary">
-            Showing {(pagination.page - 1) * pagination.limit + 1} to{" "}
-            {Math.min(pagination.page * pagination.limit, pagination.total)} of{" "}
+            Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
+            {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
             {pagination.total} barcodes
           </Typography>
           <Pagination
@@ -1085,11 +1097,11 @@ const Barcodes = () => {
       )}
 
       {barcodes.length === 0 && (
-        <Box sx={{ textAlign: "center", py: 4 }}>
+        <Box sx={{ textAlign: 'center', py: 4 }}>
           <Typography variant="h6" color="text.secondary">
             {search || selectedProduct
-              ? "No barcodes found matching your criteria"
-              : "No barcodes available"}
+              ? 'No barcodes found matching your criteria'
+              : 'No barcodes available'}
           </Typography>
           {canEdit && !search && !selectedProduct && (
             <Button
@@ -1109,7 +1121,7 @@ const Barcodes = () => {
         open={generateDialogOpen}
         onClose={() => setGenerateDialogOpen(false)}
         onSuccess={() => {
-          queryClient.invalidateQueries("barcodes");
+          queryClient.invalidateQueries('barcodes');
         }}
         onPrintGenerated={handlePrintGeneratedBarcodes}
       />
@@ -1143,22 +1155,22 @@ const Barcodes = () => {
                 >
                   Barcode Preview
                 </Typography>
-                <Box sx={{ display: "flex", justifyContent: "center", mb: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
                   {(() => {
                     const barcodeImage = generateBarcodeImage(
-                      selectedBarcode.barcode
+                      selectedBarcode.barcode,
                     );
                     return barcodeImage ? (
                       <img
                         src={barcodeImage}
                         alt={`Barcode ${selectedBarcode.barcode}`}
                         style={{
-                          maxWidth: "300px",
-                          height: "auto",
-                          border: "1px solid #e0e0e0",
-                          borderRadius: "8px",
-                          padding: "12px",
-                          backgroundColor: "white",
+                          maxWidth: '300px',
+                          height: 'auto',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: '8px',
+                          padding: '12px',
+                          backgroundColor: 'white',
                         }}
                       />
                     ) : (
@@ -1201,8 +1213,8 @@ const Barcodes = () => {
                   variant="body1"
                   color={
                     selectedBarcode.product_stock <= 0
-                      ? "error"
-                      : "text.primary"
+                      ? 'error'
+                      : 'text.primary'
                   }
                   fontWeight="bold"
                 >
@@ -1216,7 +1228,7 @@ const Barcodes = () => {
                 <Typography variant="body1">
                   {format(
                     new Date(selectedBarcode.created_at),
-                    "MMM dd, yyyy HH:mm"
+                    'MMM dd, yyyy HH:mm',
                   )}
                 </Typography>
               </Grid>
@@ -1228,9 +1240,9 @@ const Barcodes = () => {
                   {selectedBarcode.last_updated
                     ? format(
                         new Date(selectedBarcode.last_updated),
-                        "MMM dd, yyyy HH:mm"
+                        'MMM dd, yyyy HH:mm',
                       )
-                    : "Never"}
+                    : 'Never'}
                 </Typography>
               </Grid>
             </Grid>
@@ -1261,7 +1273,7 @@ const Barcodes = () => {
         <DialogTitle>Barcode Preview</DialogTitle>
         <DialogContent>
           {selectedBarcodeForPreview && (
-            <Box sx={{ textAlign: "center", py: 2 }}>
+            <Box sx={{ textAlign: 'center', py: 2 }}>
               {/* Product Details */}
               <Box sx={{ mb: 3 }}>
                 <Typography variant="h5" gutterBottom fontWeight="bold">
@@ -1273,22 +1285,22 @@ const Barcodes = () => {
               </Box>
 
               {/* Barcode Image */}
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
+              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
                 {(() => {
                   const barcodeImage = generateBarcodeImage(
-                    selectedBarcodeForPreview.barcode
+                    selectedBarcodeForPreview.barcode,
                   );
                   return barcodeImage ? (
                     <img
                       src={barcodeImage}
                       alt={`Barcode ${selectedBarcodeForPreview.barcode}`}
                       style={{
-                        maxWidth: "400px",
-                        height: "auto",
-                        border: "1px solid #e0e0e0",
-                        borderRadius: "8px",
-                        padding: "16px",
-                        backgroundColor: "white",
+                        maxWidth: '400px',
+                        height: 'auto',
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '8px',
+                        padding: '16px',
+                        backgroundColor: 'white',
                       }}
                     />
                   ) : (

@@ -115,10 +115,31 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} joined room: ${room}`);
   });
 
-  socket.on("disconnect", () => {
-    console.log("Client disconnected:", socket.id);
+  socket.on("disconnect", (reason) => {
+    console.log("Client disconnected:", socket.id, "Reason:", reason);
+  });
+
+  socket.on("error", (error) => {
+    console.error("Socket error:", error);
   });
 });
+
+// Add Socket.IO error handling
+io.engine.on("connection_error", (err) => {
+  console.error("Socket.IO connection error:", err);
+});
+
+// Test database connection on startup
+const testDatabaseConnection = async () => {
+  try {
+    const [rows] = await pool.execute("SELECT 1 as test");
+    console.log("✅ Database connection successful");
+    return true;
+  } catch (error) {
+    console.error("❌ Database connection failed:", error.message);
+    return false;
+  }
+};
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -168,6 +189,12 @@ const PORT = process.env.PORT || 5001;
 server.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
+
+  // Test database connection
+  const dbConnected = await testDatabaseConnection();
+  if (!dbConnected) {
+    console.error("❌ Server started but database connection failed!");
+  }
 
   // Update database schema on startup
   await updateSchema();

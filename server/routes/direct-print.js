@@ -1,7 +1,7 @@
-const express = require("express");
+const express = require('express');
 const router = express.Router();
-const { pool } = require("../config/database"); // Use centralized database config
-const printerService = require("../services/printerService");
+const { pool } = require('../config/database'); // Use centralized database config
+const printerService = require('../services/printerService');
 
 // Generate unique barcode number with consistent length
 function generateBarcodeNumber() {
@@ -9,32 +9,32 @@ function generateBarcodeNumber() {
   const timestamp = Date.now().toString();
   const random = Math.floor(Math.random() * 100000)
     .toString()
-    .padStart(5, "0");
+    .padStart(5, '0');
 
   // Ensure consistent 18-digit length
   const barcode = timestamp + random;
-  return barcode.padStart(18, "0").slice(-18); // Take last 18 digits
+  return barcode.padStart(18, '0').slice(-18); // Take last 18 digits
 }
 
 // Direct print endpoint
-router.post("/print-barcodes", async (req, res) => {
+router.post('/print-barcodes', async (req, res) => {
   try {
     const { productId, quantity, existingBarcode, existingBarcodes } = req.body;
 
     if (!productId || !quantity) {
       return res
         .status(400)
-        .json({ error: "Product ID and quantity are required" });
+        .json({ error: 'Product ID and quantity are required' });
     }
 
     // Get product details
     const [productRows] = await pool.execute(
-      "SELECT * FROM products WHERE id = ?",
-      [productId]
+      'SELECT * FROM products WHERE id = ?',
+      [productId],
     );
 
     if (productRows.length === 0) {
-      return res.status(404).json({ error: "Product not found" });
+      return res.status(404).json({ error: 'Product not found' });
     }
 
     const product = productRows[0];
@@ -46,23 +46,23 @@ router.post("/print-barcodes", async (req, res) => {
       // Skip database validation for better performance (trust frontend)
       // Only validate if barcodes array is suspiciously large
       if (existingBarcodes.length > 100) {
-        const barcodePlaceholders = existingBarcodes.map(() => "?").join(",");
+        const barcodePlaceholders = existingBarcodes.map(() => '?').join(',');
         const [existingBarcodesResult] = await pool.execute(
           `SELECT barcode FROM barcodes WHERE barcode IN (${barcodePlaceholders})`,
-          existingBarcodes
+          existingBarcodes,
         );
 
         const existingBarcodeNumbers = existingBarcodesResult.map(
-          (row) => row.barcode
+          (row) => row.barcode,
         );
         const missingBarcodes = existingBarcodes.filter(
-          (barcode) => !existingBarcodeNumbers.includes(barcode)
+          (barcode) => !existingBarcodeNumbers.includes(barcode),
         );
 
         if (missingBarcodes.length > 0) {
           return res.status(404).json({
             error: `Barcodes not found in database: ${missingBarcodes.join(
-              ", "
+              ', ',
             )}`,
           });
         }
@@ -80,12 +80,12 @@ router.post("/print-barcodes", async (req, res) => {
     } else if (existingBarcode) {
       // Single existing barcode
       const [existingBarcodeRows] = await pool.execute(
-        "SELECT * FROM barcodes WHERE barcode = ?",
-        [existingBarcode]
+        'SELECT * FROM barcodes WHERE barcode = ?',
+        [existingBarcode],
       );
 
       if (existingBarcodeRows.length === 0) {
-        return res.status(404).json({ error: "Barcode not found in database" });
+        return res.status(404).json({ error: 'Barcode not found in database' });
       }
 
       // Use the existing barcode
@@ -105,8 +105,8 @@ router.post("/print-barcodes", async (req, res) => {
         const timestamp = (baseTimestamp + i).toString();
         const random = Math.floor(Math.random() * 100000)
           .toString()
-          .padStart(5, "0");
-        const barcode = (timestamp + random).padStart(18, "0").slice(-18);
+          .padStart(5, '0');
+        const barcode = (timestamp + random).padStart(18, '0').slice(-18);
 
         barcodes.push({
           barcode: barcode,
@@ -122,7 +122,7 @@ router.post("/print-barcodes", async (req, res) => {
       // Ultra-fast bulk insert for better performance
       if (barcodes.length > 1) {
         // Use bulk insert for multiple barcodes
-        const values = barcodes.map(() => "(?, ?, ?, ?)").join(", ");
+        const values = barcodes.map(() => '(?, ?, ?, ?)').join(', ');
 
         const params = barcodes.flatMap((barcode) => [
           barcode.barcode,
@@ -133,56 +133,103 @@ router.post("/print-barcodes", async (req, res) => {
 
         await pool.execute(
           `INSERT INTO barcodes (barcode, product_id, units_assigned, created_at) VALUES ${values}`,
-          params
+          params,
         );
       } else {
         // Single insert for one barcode
         await pool.execute(
-          "INSERT INTO barcodes (barcode, product_id, units_assigned, created_at) VALUES (?, ?, ?, ?)",
+          'INSERT INTO barcodes (barcode, product_id, units_assigned, created_at) VALUES (?, ?, ?, ?)',
           [
             barcodes[0].barcode,
             barcodes[0].product_id,
             barcodes[0].units_assigned,
             barcodes[0].created_at,
-          ]
+          ],
         );
       }
     }
 
-    // Print barcode labels directly to thermal printer
-    await printerService.printBarcodeLabels(
-      product,
-      barcodes.map((b) => b.barcode)
-    );
+    // Print barcode labels using the printer service
+    try {
+      const printerService = require('../services/printerService');
+      let content = '';
+      console.log(
+        'Barcodes to print:',
+        barcodes.map((b) => ({ barcode: b.barcode, product_id: b.product_id })),
+      );
 
-    res.json({
-      success: true,
-      message: `${barcodes.length} barcode(s) printed successfully`,
-      barcodes: barcodes.map((b) => b.barcode),
-    });
+      for (const barcode of barcodes) {
+        content += printerService.generateBarcodeLabel(
+          product,
+          barcode.barcode,
+        );
+      }
+
+      console.log('Generated TSPL2 content length:', content.length);
+      console.log('First 200 chars of content:', content.substring(0, 200));
+
+      const printResult = await printerService.print(content);
+      console.log('Print result:', printResult);
+
+      if (printResult.vpsMode) {
+        res.json({
+          success: true,
+          message: `${barcodes.length} barcode(s) generated as PDF`,
+          barcodes: barcodes.map((b) => b.barcode),
+          pdfPath: printResult.filePath,
+          filename: printResult.filename,
+          vpsMode: true,
+        });
+      } else if (printResult.cupsMode) {
+        res.json({
+          success: true,
+          message: `${barcodes.length} barcode(s) printed successfully via CUPS`,
+          barcodes: barcodes.map((b) => b.barcode),
+        });
+      } else if (printResult.tscMode) {
+        res.json({
+          success: true,
+          message: `${barcodes.length} barcode(s) printed successfully via TSC USB`,
+          barcodes: barcodes.map((b) => b.barcode),
+        });
+      } else {
+        res.json({
+          success: true,
+          message: `${barcodes.length} barcode(s) printed successfully`,
+          barcodes: barcodes.map((b) => b.barcode),
+        });
+      }
+    } catch (printerError) {
+      console.error('Printer error:', printerError);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to print barcodes',
+        details: printerError.message,
+      });
+    }
   } catch (error) {
-    console.error("Error printing barcodes:", error);
-    res.status(500).json({ error: "Failed to print barcodes" });
+    console.error('Error printing barcodes:', error);
+    res.status(500).json({ error: 'Failed to print barcodes' });
   }
 });
 
 // Print existing barcode endpoint
-router.post("/print-existing-barcode", async (req, res) => {
+router.post('/print-existing-barcode', async (req, res) => {
   try {
     const { barcodeNumber } = req.body;
 
     if (!barcodeNumber) {
-      return res.status(400).json({ error: "Barcode number is required" });
+      return res.status(400).json({ error: 'Barcode number is required' });
     }
 
     // Get barcode details
     const [barcodeRows] = await pool.execute(
-      "SELECT b.*, p.* FROM barcodes b JOIN products p ON b.product_id = p.id WHERE b.barcode = ?",
-      [barcodeNumber]
+      'SELECT b.*, p.* FROM barcodes b JOIN products p ON b.product_id = p.id WHERE b.barcode = ?',
+      [barcodeNumber],
     );
 
     if (barcodeRows.length === 0) {
-      return res.status(404).json({ error: "Barcode not found" });
+      return res.status(404).json({ error: 'Barcode not found' });
     }
 
     const barcodeData = barcodeRows[0];
@@ -192,36 +239,36 @@ router.post("/print-existing-barcode", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Barcode printed successfully",
+      message: 'Barcode printed successfully',
       barcodes: [barcodeNumber],
     });
   } catch (error) {
-    console.error("Error printing existing barcode:", error);
-    res.status(500).json({ error: "Failed to print barcode" });
+    console.error('Error printing existing barcode:', error);
+    res.status(500).json({ error: 'Failed to print barcode' });
   }
 });
 
 // Test printer connection endpoint
-router.post("/test-printer", async (req, res) => {
+router.post('/test-printer', async (req, res) => {
   try {
     const result = await printerService.testConnection();
     res.json(result);
   } catch (error) {
-    console.error("Printer test error:", error);
-    res.status(500).json({ error: "Failed to test printer" });
+    console.error('Printer test error:', error);
+    res.status(500).json({ error: 'Failed to test printer' });
   }
 });
 
 // Get printer status endpoint
-router.get("/printer-status", async (req, res) => {
+router.get('/printer-status', async (req, res) => {
   try {
-    const PrinterService = require("../services/printerService");
+    const PrinterService = require('../services/printerService');
     const printerService = new PrinterService();
     const result = await printerService.testConnection();
     res.json(result);
   } catch (error) {
-    console.error("Printer status error:", error);
-    res.status(500).json({ error: "Failed to get printer status" });
+    console.error('Printer status error:', error);
+    res.status(500).json({ error: 'Failed to get printer status' });
   }
 });
 

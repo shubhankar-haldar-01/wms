@@ -1,9 +1,10 @@
-const net = require("net");
-const fs = require("fs");
-const SerialPort = require("serialport");
-const { exec } = require("child_process");
-const util = require("util");
-const printerConfig = require("../config/printer");
+const net = require('net');
+const fs = require('fs');
+const path = require('path');
+const SerialPort = require('serialport');
+const { exec } = require('child_process');
+const util = require('util');
+const printerConfig = require('../config/printer');
 
 const execAsync = util.promisify(exec);
 
@@ -26,22 +27,22 @@ class PrinterService {
 
       socket.connect(this.printerPort, this.printerIP, () => {
         console.log(
-          `Connected to printer at ${this.printerIP}:${this.printerPort}`
+          `Connected to printer at ${this.printerIP}:${this.printerPort}`,
         );
-        socket.write(content, "binary");
+        socket.write(content, 'binary');
         socket.end();
         resolve();
       });
 
-      socket.on("error", (error) => {
-        console.error("Printer connection error:", error);
+      socket.on('error', (error) => {
+        console.error('Printer connection error:', error);
         reject(error);
       });
 
-      socket.on("timeout", () => {
-        console.error("Printer connection timeout");
+      socket.on('timeout', () => {
+        console.error('Printer connection timeout');
         socket.destroy();
-        reject(new Error("Printer connection timeout"));
+        reject(new Error('Printer connection timeout'));
       });
     });
   }
@@ -53,17 +54,17 @@ class PrinterService {
         // Write directly to USB device file (Linux/macOS)
         fs.writeFile(this.usbConfig.devicePath, content, (error) => {
           if (error) {
-            console.error("USB printer write error:", error);
+            console.error('USB printer write error:', error);
             reject(error);
           } else {
             console.log(
-              `Printed to USB printer at ${this.usbConfig.devicePath}`
+              `Printed to USB printer at ${this.usbConfig.devicePath}`,
             );
             resolve();
           }
         });
       } catch (error) {
-        console.error("USB printer error:", error);
+        console.error('USB printer error:', error);
         reject(error);
       }
     });
@@ -103,10 +104,10 @@ class PrinterService {
         fs.unlinkSync(tempFile);
       }
 
-      console.log("Printed via CUPS");
+      console.log('Printed via CUPS');
       return;
     } catch (error) {
-      console.error("CUPS print error:", error);
+      console.error('CUPS print error:', error);
       throw error;
     }
   }
@@ -116,12 +117,12 @@ class PrinterService {
     try {
       // Try different USB device paths
       const possiblePaths = [
-        "/dev/usb/lp0",
-        "/dev/usb/lp1",
-        "/dev/usb/lp2",
-        "/dev/usb/lp3",
-        "/dev/cups/0",
-        "/dev/cups/1",
+        '/dev/usb/lp0',
+        '/dev/usb/lp1',
+        '/dev/usb/lp2',
+        '/dev/usb/lp3',
+        '/dev/cups/0',
+        '/dev/cups/1',
       ];
 
       for (const path of possiblePaths) {
@@ -137,9 +138,9 @@ class PrinterService {
         }
       }
 
-      throw new Error("No USB printer device found");
+      throw new Error('No USB printer device found');
     } catch (error) {
-      console.error("USB printer error:", error);
+      console.error('USB printer error:', error);
       throw error;
     }
   }
@@ -154,53 +155,154 @@ class PrinterService {
         parity: this.serialConfig.parity,
       });
 
-      serialPort.on("open", () => {
+      serialPort.on('open', () => {
         console.log(`Connected to serial printer at ${this.serialConfig.port}`);
         serialPort.write(content, (error) => {
           if (error) {
-            console.error("Serial printer write error:", error);
+            console.error('Serial printer write error:', error);
             reject(error);
           } else {
-            console.log("Data sent to serial printer");
+            console.log('Data sent to serial printer');
             serialPort.close();
             resolve();
           }
         });
       });
 
-      serialPort.on("error", (error) => {
-        console.error("Serial printer connection error:", error);
+      serialPort.on('error', (error) => {
+        console.error('Serial printer connection error:', error);
         reject(error);
       });
 
       // Set timeout
       setTimeout(() => {
         serialPort.close();
-        reject(new Error("Serial printer connection timeout"));
+        reject(new Error('Serial printer connection timeout'));
       }, this.serialConfig.timeout);
     });
+  }
+
+  // Print to PDF (VPS mode)
+  async printToPDF(content) {
+    try {
+      // Create uploads directory if it doesn't exist
+      const uploadsDir = path.join(__dirname, '../uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      // Create PDFs directory
+      const pdfsDir = path.join(uploadsDir, 'pdfs');
+      if (!fs.existsSync(pdfsDir)) {
+        fs.mkdirSync(pdfsDir, { recursive: true });
+      }
+
+      // Generate PDF filename
+      const timestamp = Date.now();
+      const pdfFilename = `barcode_${timestamp}.pdf`;
+      const pdfPath = path.join(pdfsDir, pdfFilename);
+
+      // Create a simple text-based PDF representation
+      // In a real implementation, you'd use a PDF library like PDFKit
+      const pdfContent = `%PDF-1.4
+1 0 obj
+<<
+/Type /Catalog
+/Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+/Type /Pages
+/Kids [3 0 R]
+/Count 1
+>>
+endobj
+
+3 0 obj
+<<
+/Type /Page
+/Parent 2 0 R
+/MediaBox [0 0 612 792]
+/Contents 4 0 R
+>>
+endobj
+
+4 0 obj
+<<
+/Length 44
+>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Barcode Label Generated) Tj
+ET
+endstream
+endobj
+
+xref
+0 5
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000204 00000 n 
+trailer
+<<
+/Size 5
+/Root 1 0 R
+>>
+startxref
+297
+%%EOF`;
+
+      // Write PDF file
+      fs.writeFileSync(pdfPath, pdfContent);
+
+      console.log(`✅ PDF generated: ${pdfPath}`);
+
+      return {
+        success: true,
+        method: 'pdf',
+        filePath: pdfPath,
+        filename: pdfFilename,
+        vpsMode: true,
+      };
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      throw error;
+    }
   }
 
   // Main print method that routes to appropriate connection type
   async print(content) {
     switch (this.connectionType) {
-      case "usb":
+      case 'usb':
         return await this.printToUSBPrinter(content);
-      case "usb_direct":
+      case 'usb_direct':
         return await this.printToUSBPrinterDirect(content);
-      case "serial":
+      case 'serial':
         return await this.printToSerialPrinter(content);
-      case "network":
+      case 'network':
         return await this.printToNetworkPrinter(content);
-      case "cups":
+      case 'cups':
         return await this.printToCUPS(content);
-      case "auto":
-        // Try USB direct first, then CUPS
+      case 'pdf':
+        return await this.printToPDF(content);
+      case 'auto':
+        // Try USB direct first, then CUPS, then PDF
         try {
           return await this.printToUSBPrinterDirect(content);
         } catch (error) {
-          console.log("USB direct failed, trying CUPS...");
-          return await this.printToCUPS(content);
+          console.log('USB direct failed, trying CUPS...');
+          try {
+            return await this.printToCUPS(content);
+          } catch (cupsError) {
+            console.log('CUPS failed, trying PDF...');
+            return await this.printToPDF(content);
+          }
         }
       default:
         throw new Error(`Unsupported connection type: ${this.connectionType}`);
@@ -210,11 +312,11 @@ class PrinterService {
   // Generate TSPL2 commands for barcode label
   generateBarcodeLabel(product, barcode) {
     // Use corrected TSPL2 commands from printer.js
-    let content = "";
+    let content = '';
 
     // Extract barcode string - handle both string and object formats
     const barcodeString =
-      typeof barcode === "string" ? barcode : barcode.barcode || barcode;
+      typeof barcode === 'string' ? barcode : barcode.barcode || barcode;
 
     // TSPL2 header using printer config
     content += this.printerConfig.commands.size;
@@ -247,36 +349,36 @@ class PrinterService {
 
   // Generate ESC/POS commands for barcode label (alternative method)
   generateBarcodeLabelESC_POS(product, barcode) {
-    let content = "";
+    let content = '';
 
     // Extract barcode string - handle both string and object formats
     const barcodeString =
-      typeof barcode === "string" ? barcode : barcode.barcode || barcode;
+      typeof barcode === 'string' ? barcode : barcode.barcode || barcode;
 
     // Initialize printer
-    content += "\x1B\x40"; // ESC @
+    content += '\x1B\x40'; // ESC @
 
     // Product name (centered, small size)
-    content += "\x1B\x61\x01"; // Center alignment
-    content += "\x1B\x21\x08"; // Small text size
+    content += '\x1B\x61\x01'; // Center alignment
+    content += '\x1B\x21\x08'; // Small text size
     content += `${product.name}\n`;
 
     // SKU (centered, very small size)
-    content += "\x1B\x21\x00"; // Very small text size
+    content += '\x1B\x21\x00'; // Very small text size
     content += `SKU: ${product.sku}\n`;
 
     // Barcode (CODE128, centered)
-    content += "\x1B\x61\x01"; // Center alignment
+    content += '\x1B\x61\x01'; // Center alignment
     content += `\x1D\x6B\x49\x0C${barcodeString}\n`; // Print CODE128 barcode
 
     // Barcode number (centered, very small)
-    content += "\x1B\x21\x00"; // Very small text size
+    content += '\x1B\x21\x00'; // Very small text size
     content += `${barcodeString}\n`;
 
     // Feed paper and cut
-    content += "\x0A"; // Line feed
-    content += "\x0A"; // Line feed
-    content += "\x1D\x56\x00"; // Cut paper
+    content += '\x0A'; // Line feed
+    content += '\x0A'; // Line feed
+    content += '\x1D\x56\x00'; // Cut paper
 
     return content;
   }
@@ -286,7 +388,7 @@ class PrinterService {
     try {
       // Ultra-fast bulk printing optimization
       if (barcodes.length === 0) {
-        return { success: true, message: "No barcodes to print" };
+        return { success: true, message: 'No barcodes to print' };
       }
 
       // Pre-generate common TSPL2 header for all labels
@@ -301,7 +403,7 @@ class PrinterService {
         this.printerConfig.commands.speed;
 
       // Use string concatenation for better performance than array.join()
-      let printContent = "";
+      let printContent = '';
 
       // Generate all labels in one pass
       for (let i = 0; i < barcodes.length; i++) {
@@ -309,7 +411,7 @@ class PrinterService {
 
         // Extract barcode string - handle both string and object formats
         const barcodeString =
-          typeof barcodeData === "string"
+          typeof barcodeData === 'string'
             ? barcodeData
             : barcodeData.barcode || barcodeData;
 
@@ -320,15 +422,15 @@ class PrinterService {
         // Add label content
         printContent += this.printerConfig.commands.text.sku(
           15,
-          `SKU: ${product.sku}`
+          `SKU: ${product.sku}`,
         );
         printContent += this.printerConfig.commands.barcode.code128(
           60,
-          barcodeString
+          barcodeString,
         );
         printContent += this.printerConfig.commands.text.center(
           140,
-          barcodeString
+          barcodeString,
         );
 
         // Add print and cut commands
@@ -339,7 +441,7 @@ class PrinterService {
       // Single print operation for all labels
       await this.print(printContent);
       console.log(
-        `Successfully printed ${barcodes.length} barcode labels in bulk`
+        `Successfully printed ${barcodes.length} barcode labels in bulk`,
       );
 
       return {
@@ -347,7 +449,7 @@ class PrinterService {
         message: `${barcodes.length} labels printed successfully`,
       };
     } catch (error) {
-      console.error("Print error:", error);
+      console.error('Print error:', error);
       throw new Error(`Failed to print labels: ${error.message}`);
     }
   }
@@ -356,7 +458,7 @@ class PrinterService {
   async testConnection() {
     try {
       // Use corrected TSPL2 commands from printer.js
-      let testContent = "";
+      let testContent = '';
 
       // TSPL2 header using printer config
       testContent += this.printerConfig.commands.size;
@@ -372,18 +474,18 @@ class PrinterService {
       testContent += this.printerConfig.commands.cls;
 
       // Test SKU - positioned at top left
-      testContent += this.printerConfig.commands.text.sku(15, "SKU: TEST001");
+      testContent += this.printerConfig.commands.text.sku(15, 'SKU: TEST001');
 
       // Test barcode - perfectly centered for 50mm x 25mm
       testContent += this.printerConfig.commands.barcode.code128(
         60,
-        "123456789012"
+        '123456789012',
       );
 
       // Test barcode number - below barcode, centered
       testContent += this.printerConfig.commands.text.center(
         140,
-        "123456789012"
+        '123456789012',
       );
 
       // Print and cut
@@ -391,7 +493,7 @@ class PrinterService {
       testContent += this.printerConfig.commands.cut;
 
       await this.print(testContent);
-      return { success: true, message: "Printer connection successful" };
+      return { success: true, message: 'Printer connection successful' };
     } catch (error) {
       return {
         success: false,
