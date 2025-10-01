@@ -77,15 +77,27 @@ class PrinterService {
       const tempFile = `/tmp/print_job_${Date.now()}.tspl`;
       fs.writeFileSync(tempFile, content);
 
-      // First, try to create a virtual printer if none exists
+      // Ensure CUPS is running
+      try {
+        await execAsync(
+          'systemctl is-active --quiet cups || systemctl start cups',
+        );
+        console.log('✅ CUPS service is running');
+      } catch (error) {
+        console.log('ℹ️ CUPS service check skipped:', error.message);
+      }
+
+      // Create a proper virtual printer for barcode printing
       try {
         // Check if printer exists, if not create it
         const { stdout } = await execAsync(
-          'lpstat -p 2>/dev/null | grep TSC_TE244 || echo "not_found"',
+          'lpstat -p 2>/dev/null | grep TSC_TE244 || echo "not found"',
         );
-        if (stdout.includes('not_found')) {
-          console.log('🖨️ Creating virtual printer TSC_TE244...');
-          await execAsync('lpadmin -p TSC_TE244 -E -v file:///dev/null -m raw');
+        if (stdout.includes('not found')) {
+          console.log('🖨️ Creating TSC_TE244 virtual printer...');
+          await execAsync(
+            'lpadmin -p TSC_TE244 -E -v file:///dev/null -m raw -D "TSC Barcode Printer" -L "WMS Barcode Printer"',
+          );
           console.log('✅ Virtual printer TSC_TE244 created');
         } else {
           console.log('✅ Virtual printer TSC_TE244 already exists');
@@ -94,29 +106,28 @@ class PrinterService {
         console.log('ℹ️ Virtual printer setup skipped:', error.message);
       }
 
-      // Try multiple CUPS options for TSC printer
+      // Try to print with proper job tracking
+      let jobId = null;
       const commands = [
-        `lp -d TSC_TE244 -o raw "${tempFile}"`,
+        `lp -d TSC_TE244 -o raw -o job-sheets=none -t "WMS Barcode Print" "${tempFile}"`,
         `lp -d TSC_TE244 -o raw -o job-sheets=none "${tempFile}"`,
-        `lp -d TSC_TE244 -o raw -o job-sheets=none -o media=Custom.50x25mm "${tempFile}"`,
-        `echo '${content.replace(/'/g, "'\\''")}' | lp -d TSC_TE244 -o raw`,
-        // Fallback to any available printer
-        `lp -o raw "${tempFile}"`,
+        `lp -d TSC_TE244 -o raw "${tempFile}"`,
+        `lp -o raw -t "WMS Barcode Print" "${tempFile}"`,
         `lp "${tempFile}"`,
       ];
 
       let success = false;
-      let jobId = null;
       for (let i = 0; i < commands.length; i++) {
         try {
           console.log(`Trying CUPS method ${i + 1}...`);
           const { stdout } = await execAsync(commands[i]);
           console.log(`✅ CUPS method ${i + 1} successful`);
-          console.log(`📄 Print job output: ${stdout}`);
 
-          // Extract job ID if available
-          if (stdout.includes('request id is')) {
-            jobId = stdout.match(/request id is (.+?) \(/)?.[1];
+          // Extract job ID from output (format: "request id is TSC_TE244-123 (1 file(s))")
+          const jobMatch = stdout.match(/request id is (\S+)/);
+          if (jobMatch) {
+            jobId = jobMatch[1];
+            console.log(`📋 Print job ID: ${jobId}`);
           }
 
           success = true;
@@ -134,16 +145,6 @@ class PrinterService {
 
       if (success) {
         console.log('✅ Printed via CUPS');
-        console.log(`📋 Job ID: ${jobId || 'N/A'}`);
-
-        // Check printer queue to verify job was queued
-        try {
-          const { stdout: queueOutput } = await execAsync('lpq');
-          console.log('📋 Printer queue status:', queueOutput);
-        } catch (queueError) {
-          console.log('ℹ️ Could not check printer queue:', queueError.message);
-        }
-
         return {
           success: true,
           method: 'cups',
@@ -151,7 +152,7 @@ class PrinterService {
           jobId: jobId,
           message: jobId
             ? `Print job queued with ID: ${jobId}`
-            : 'Print job submitted successfully',
+            : 'Print job queued successfully',
         };
       } else {
         throw new Error('All CUPS printing methods failed');
@@ -326,6 +327,42 @@ startxref
     }
   }
 
+  // Print to file (VPS mode - saves print jobs to files)
+  async printToFile(content) {
+    try {
+      // Create print jobs directory
+      const printJobsDir = path.join(__dirname, '../print-jobs');
+      if (!fs.existsSync(printJobsDir)) {
+        fs.mkdirSync(printJobsDir, { recursive: true });
+      }
+
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `barcode-print-${timestamp}.tspl`;
+      const filePath = path.join(printJobsDir, filename);
+
+      // Write TSPL2 content to file
+      fs.writeFileSync(filePath, content, 'utf8');
+
+      console.log(`✅ Print job saved to file: ${filePath}`);
+      console.log(
+        `📄 TSPL2 Content (first 200 chars): ${content.substring(0, 200)}...`,
+      );
+
+      return {
+        success: true,
+        method: 'file',
+        filePath: filePath,
+        filename: filename,
+        fileMode: true,
+        message: 'Print job saved to file successfully',
+      };
+    } catch (error) {
+      console.error('File printing error:', error);
+      throw error;
+    }
+  }
+
   // Main print method that routes to appropriate connection type
   async print(content) {
     switch (this.connectionType) {
@@ -341,6 +378,8 @@ startxref
         return await this.printToCUPS(content);
       case 'pdf':
         return await this.printToPDF(content);
+      case 'file':
+        return await this.printToFile(content);
       case 'auto':
         // Try USB direct first, then CUPS, then PDF
         try {

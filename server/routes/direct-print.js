@@ -171,7 +171,16 @@ router.post('/print-barcodes', async (req, res) => {
       const printResult = await printerService.print(content);
       console.log('Print result:', printResult);
 
-      if (printResult.vpsMode) {
+      if (printResult.fileMode) {
+        res.json({
+          success: true,
+          message: `${barcodes.length} barcode(s) printed successfully (saved to file)`,
+          barcodes: barcodes.map((b) => b.barcode),
+          filePath: printResult.filePath,
+          filename: printResult.filename,
+          fileMode: true,
+        });
+      } else if (printResult.vpsMode) {
         res.json({
           success: true,
           message: `${barcodes.length} barcode(s) generated as PDF`,
@@ -273,6 +282,57 @@ router.get('/printer-status', async (req, res) => {
   } catch (error) {
     console.error('Printer status error:', error);
     res.status(500).json({ error: 'Failed to get printer status' });
+  }
+});
+
+// Get printer queue status endpoint
+router.get('/printer-queue', async (req, res) => {
+  try {
+    const { exec } = require('child_process');
+    const util = require('util');
+    const execAsync = util.promisify(exec);
+
+    // Get printer queue status
+    const { stdout: queueOutput } = await execAsync(
+      'lpq 2>/dev/null || echo "No jobs waiting"',
+    );
+    const { stdout: printerStatus } = await execAsync(
+      'lpstat -p 2>/dev/null || echo "No printers found"',
+    );
+
+    // Parse queue information
+    const hasJobs =
+      !queueOutput.includes('No jobs waiting') && queueOutput.trim().length > 0;
+    const jobCount = hasJobs
+      ? queueOutput.split('\n').filter((line) => line.includes('TSC_TE244'))
+          .length
+      : 0;
+
+    res.json({
+      success: true,
+      data: {
+        hasJobs: hasJobs,
+        jobCount: jobCount,
+        queueOutput: queueOutput.trim(),
+        printerStatus: printerStatus.trim(),
+        printerOnline:
+          printerStatus.includes('TSC_TE244') &&
+          !printerStatus.includes('No printers found'),
+      },
+    });
+  } catch (error) {
+    console.error('Printer queue error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to get printer queue status',
+      data: {
+        hasJobs: false,
+        jobCount: 0,
+        queueOutput: 'Error checking queue',
+        printerStatus: 'Error checking printers',
+        printerOnline: false,
+      },
+    });
   }
 });
 

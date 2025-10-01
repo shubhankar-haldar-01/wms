@@ -315,9 +315,13 @@ const BarcodePrintDialog = ({
       console.log('Print response:', result);
 
       if (result.success) {
-        if (result.cupsMode) {
+        if (result.fileMode) {
+          toast.success(
+            `${barcodes.length} barcode(s) printed successfully (saved to file)`,
+          );
+        } else if (result.cupsMode) {
           const message = result.jobId
-            ? `${barcodes.length} barcode(s) queued for printing (Job ID: ${result.jobId})`
+            ? `${barcodes.length} barcode(s) printed successfully via CUPS (Job ID: ${result.jobId})`
             : `${barcodes.length} barcode(s) printed successfully via CUPS`;
           toast.success(message);
         } else if (result.vpsMode) {

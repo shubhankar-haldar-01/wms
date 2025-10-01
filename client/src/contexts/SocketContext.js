@@ -20,26 +20,31 @@ export const SocketProvider = ({ children }) => {
 
   useEffect(() => {
     if (user) {
-      // Initialize socket connection
-      const newSocket = io(
-        process.env.REACT_APP_SERVER_URL || window.location.origin,
-        {
-          auth: {
-            userId: user.id,
-            username: user.username,
-          },
-          // Add connection options for better stability
-          transports: ['websocket', 'polling'],
-          upgrade: true,
-          rememberUpgrade: true,
-          timeout: 20000,
-          forceNew: true,
-          reconnection: true,
-          reconnectionDelay: 1000,
-          reconnectionAttempts: 5,
-          maxReconnectionAttempts: 5,
+      // Initialize socket connection - dynamically detect server URL
+      const serverUrl =
+        process.env.REACT_APP_SERVER_URL ||
+        window.location.protocol +
+          '//' +
+          window.location.hostname +
+          ':' +
+          (window.location.port || '5001');
+
+      const newSocket = io(serverUrl, {
+        auth: {
+          userId: user.id,
+          username: user.username,
         },
-      );
+        // Add connection options for better stability
+        transports: ['websocket', 'polling'],
+        upgrade: true,
+        rememberUpgrade: true,
+        timeout: 20000,
+        forceNew: true,
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        maxReconnectionAttempts: 5,
+      });
 
       newSocket.on('connect', () => {
         console.log('Connected to server');

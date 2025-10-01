@@ -4,8 +4,8 @@
 
 echo "🚀 Starting production deployment for WMS..."
 
-mkdir -p logs temp uploads
-chmod 755 logs temp uploads
+mkdir -p logs temp uploads server/print-jobs
+chmod 755 logs temp uploads server/print-jobs
 
 export NODE_ENV=production
 

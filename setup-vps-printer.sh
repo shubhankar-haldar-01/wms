@@ -20,7 +20,7 @@ sleep 3
 
 # Create a virtual printer for barcode printing
 echo "🖨️ Creating virtual printer..."
-lpadmin -p TSC_TE244 -E -v file:///dev/null -m raw
+lpadmin -p TSC_TE244 -E -v file:///dev/null -m raw -D "TSC Barcode Printer" -L "WMS Barcode Printer"
 
 # Set printer as default
 echo "⚙️ Setting printer as default..."
@@ -37,14 +37,26 @@ lpstat -p
 
 # Test print job
 echo "📄 Testing print job..."
-echo "Test barcode print job" | lp -d TSC_TE244
-
-# Check printer queue
-echo "📋 Checking printer queue..."
-lpq
+echo "SIZE 50 mm, 25 mm
+GAP 2 mm, 2 mm
+DIRECTION 1
+REFERENCE 0,0
+OFFSET 0 mm
+SET PEEL OFF
+DENSITY 7
+SPEED 4
+CLS
+TEXT 140,15,\"2\",0,1,1,\"SKU: TEST001\"
+BARCODE 70,60,\"128\",50,0,0,2,2,\"123456789012\"
+TEXT 60,140,\"3\",0,1,1,\"123456789012\"
+PRINT 1
+CUT" | lp -d TSC_TE244 -o raw
 
 echo "✅ VPS printer setup completed!"
 echo "📋 Available printers:"
 lpstat -p
 
-echo "🎯 You can now print barcodes without PDF download!"
+echo "📊 Printer queue status:"
+lpq
+
+echo "🎯 You can now print barcodes and they will appear in the printer queue!"
