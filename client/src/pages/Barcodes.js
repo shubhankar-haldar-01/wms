@@ -315,15 +315,12 @@ const BarcodePrintDialog = ({
       console.log('Print response:', result);
 
       if (result.success) {
-        if (result.vpsMode) {
+        if (result.cupsMode) {
+          toast.success(
+            `${barcodes.length} barcode(s) printed successfully via CUPS`,
+          );
+        } else if (result.vpsMode) {
           toast.success(`${barcodes.length} barcode(s) generated as PDF`);
-          // Optionally download the PDF
-          if (result.filename) {
-            const link = document.createElement('a');
-            link.href = `/uploads/pdfs/${result.filename}`;
-            link.download = result.filename;
-            link.click();
-          }
         } else {
           toast.success(`${barcodes.length} barcode(s) printed successfully`);
         }

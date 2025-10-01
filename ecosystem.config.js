@@ -22,7 +22,7 @@ module.exports = {
         DB_MAX_CONNECTIONS: 20,
         DB_CONNECTION_TIMEOUT: 10000,
         JWT_SECRET: 'your-secret-key',
-        PRINTER_CONNECTION_TYPE: 'pdf',
+        PRINTER_CONNECTION_TYPE: 'cups',
         REDIS_HOST: 'localhost',
         REDIS_PORT: 6379,
         REDIS_PASSWORD: '',

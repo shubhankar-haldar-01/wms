@@ -8,6 +8,7 @@ const requestLogger = require("./middleware/requestLogger");
 const errorHandler = require("./middleware/errorHandler");
 const dbHealthCheck = require("./middleware/dbHealthCheck");
 const { recordRequestMetrics } = require("./middleware/warehouseMonitor");
+const { pool } = require("./config/database");
 require("dotenv").config();
 
 const app = express();
@@ -17,8 +18,38 @@ const server = http.createServer(app);
 server.timeout = 300000; // 5 minutes timeout
 const io = socketIo(server, {
   cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:3000",
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+
+      // In production, be more permissive for VPS deployment
+      if (process.env.NODE_ENV === "production") {
+        console.log(
+          "Socket.IO CORS: Production mode - allowing origin:",
+          origin
+        );
+        return callback(null, true);
+      }
+
+      const allowedOrigins = [
+        process.env.CLIENT_URL || "http://localhost:3000",
+        "http://localhost:3000",
+        "https://localhost:3000",
+        "http://localhost:5001",
+        "https://localhost:5001",
+        process.env.VPS_DOMAIN || "https://your-vps-domain.com",
+      ];
+
+      if (allowedOrigins.includes(origin)) {
+        console.log("Socket.IO CORS: Origin allowed:", origin);
+        callback(null, true);
+      } else {
+        console.log("Socket.IO CORS: Origin rejected:", origin);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 

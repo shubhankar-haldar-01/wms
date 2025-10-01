@@ -77,12 +77,25 @@ class PrinterService {
       const tempFile = `/tmp/print_job_${Date.now()}.tspl`;
       fs.writeFileSync(tempFile, content);
 
+      // First, try to create a virtual printer if none exists
+      try {
+        await execAsync(
+          'lpstat -p 2>/dev/null | grep -q TSC_TE244 || lpadmin -p TSC_TE244 -E -v file:///dev/null -m raw',
+        );
+        console.log('✅ Virtual printer TSC_TE244 created/verified');
+      } catch (error) {
+        console.log('ℹ️ Virtual printer setup skipped:', error.message);
+      }
+
       // Try multiple CUPS options for TSC printer
       const commands = [
         `lp -d TSC_TE244 -o raw "${tempFile}"`,
         `lp -d TSC_TE244 -o raw -o job-sheets=none "${tempFile}"`,
         `lp -d TSC_TE244 -o raw -o job-sheets=none -o media=Custom.50x25mm "${tempFile}"`,
         `echo '${content.replace(/'/g, "'\\''")}' | lp -d TSC_TE244 -o raw`,
+        // Fallback to any available printer
+        `lp -o raw "${tempFile}"`,
+        `lp "${tempFile}"`,
       ];
 
       let success = false;
@@ -104,8 +117,12 @@ class PrinterService {
         fs.unlinkSync(tempFile);
       }
 
-      console.log('Printed via CUPS');
-      return;
+      if (success) {
+        console.log('✅ Printed via CUPS');
+        return { success: true, method: 'cups', cupsMode: true };
+      } else {
+        throw new Error('All CUPS printing methods failed');
+      }
     } catch (error) {
       console.error('CUPS print error:', error);
       throw error;

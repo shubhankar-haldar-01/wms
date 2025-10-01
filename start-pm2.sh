@@ -111,6 +111,14 @@ if [ ! -f server/.env ]; then
     echo "   PRINTER_CONNECTION_TYPE=pdf"
 fi
 
+echo "🖨️ Setting up printer configuration..."
+if [ -f "setup-vps-printer.sh" ]; then
+    chmod +x setup-vps-printer.sh
+    ./setup-vps-printer.sh
+else
+    echo "⚠️ Printer setup script not found, continuing..."
+fi
+
 echo "🔄 Starting application with PM2..."
 pm2 start ecosystem.config.js --env production
 
