@@ -183,8 +183,12 @@ router.post('/print-barcodes', async (req, res) => {
       } else if (printResult.cupsMode) {
         res.json({
           success: true,
-          message: `${barcodes.length} barcode(s) printed successfully via CUPS`,
+          message:
+            printResult.message ||
+            `${barcodes.length} barcode(s) printed successfully via CUPS`,
           barcodes: barcodes.map((b) => b.barcode),
+          jobId: printResult.jobId,
+          cupsMode: true,
         });
       } else if (printResult.tscMode) {
         res.json({

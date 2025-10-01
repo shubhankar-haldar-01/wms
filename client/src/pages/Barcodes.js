@@ -316,9 +316,10 @@ const BarcodePrintDialog = ({
 
       if (result.success) {
         if (result.cupsMode) {
-          toast.success(
-            `${barcodes.length} barcode(s) printed successfully via CUPS`,
-          );
+          const message = result.jobId
+            ? `${barcodes.length} barcode(s) queued for printing (Job ID: ${result.jobId})`
+            : `${barcodes.length} barcode(s) printed successfully via CUPS`;
+          toast.success(message);
         } else if (result.vpsMode) {
           toast.success(`${barcodes.length} barcode(s) generated as PDF`);
         } else {

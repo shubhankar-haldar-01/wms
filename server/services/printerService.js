@@ -79,10 +79,17 @@ class PrinterService {
 
       // First, try to create a virtual printer if none exists
       try {
-        await execAsync(
-          'lpstat -p 2>/dev/null | grep -q TSC_TE244 || lpadmin -p TSC_TE244 -E -v file:///dev/null -m raw',
+        // Check if printer exists, if not create it
+        const { stdout } = await execAsync(
+          'lpstat -p 2>/dev/null | grep TSC_TE244 || echo "not_found"',
         );
-        console.log('✅ Virtual printer TSC_TE244 created/verified');
+        if (stdout.includes('not_found')) {
+          console.log('🖨️ Creating virtual printer TSC_TE244...');
+          await execAsync('lpadmin -p TSC_TE244 -E -v file:///dev/null -m raw');
+          console.log('✅ Virtual printer TSC_TE244 created');
+        } else {
+          console.log('✅ Virtual printer TSC_TE244 already exists');
+        }
       } catch (error) {
         console.log('ℹ️ Virtual printer setup skipped:', error.message);
       }
@@ -99,11 +106,19 @@ class PrinterService {
       ];
 
       let success = false;
+      let jobId = null;
       for (let i = 0; i < commands.length; i++) {
         try {
           console.log(`Trying CUPS method ${i + 1}...`);
-          await execAsync(commands[i]);
+          const { stdout } = await execAsync(commands[i]);
           console.log(`✅ CUPS method ${i + 1} successful`);
+          console.log(`📄 Print job output: ${stdout}`);
+
+          // Extract job ID if available
+          if (stdout.includes('request id is')) {
+            jobId = stdout.match(/request id is (.+?) \(/)?.[1];
+          }
+
           success = true;
           break;
         } catch (error) {
@@ -119,7 +134,25 @@ class PrinterService {
 
       if (success) {
         console.log('✅ Printed via CUPS');
-        return { success: true, method: 'cups', cupsMode: true };
+        console.log(`📋 Job ID: ${jobId || 'N/A'}`);
+
+        // Check printer queue to verify job was queued
+        try {
+          const { stdout: queueOutput } = await execAsync('lpq');
+          console.log('📋 Printer queue status:', queueOutput);
+        } catch (queueError) {
+          console.log('ℹ️ Could not check printer queue:', queueError.message);
+        }
+
+        return {
+          success: true,
+          method: 'cups',
+          cupsMode: true,
+          jobId: jobId,
+          message: jobId
+            ? `Print job queued with ID: ${jobId}`
+            : 'Print job submitted successfully',
+        };
       } else {
         throw new Error('All CUPS printing methods failed');
       }

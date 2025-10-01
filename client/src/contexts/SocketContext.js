@@ -22,7 +22,7 @@ export const SocketProvider = ({ children }) => {
     if (user) {
       // Initialize socket connection
       const newSocket = io(
-        process.env.REACT_APP_SERVER_URL || 'http://localhost:5001',
+        process.env.REACT_APP_SERVER_URL || window.location.origin,
         {
           auth: {
             userId: user.id,
