@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+} from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
@@ -16,18 +22,63 @@ export const useSocket = () => {
 export const SocketProvider = ({ children }) => {
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionAttempts, setConnectionAttempts] = useState(0);
+  const toastTimeoutRef = useRef(null);
   const { user } = useAuth();
+
+  // Debounced toast function to prevent spam
+  const showDebouncedToast = (message, type = 'success', delay = 1000) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+
+    toastTimeoutRef.current = setTimeout(() => {
+      if (type === 'success') {
+        toast.success(message);
+      } else if (type === 'error') {
+        toast.error(message);
+      } else if (type === 'loading') {
+        toast.loading(message);
+      }
+    }, delay);
+  };
 
   useEffect(() => {
     if (user) {
+      // Clean up existing socket if any
+      if (socket) {
+        console.log('Cleaning up existing socket connection');
+        socket.disconnect();
+        setSocket(null);
+        setConnected(false);
+      }
+
       // Initialize socket connection - dynamically detect server URL
-      const serverUrl =
-        process.env.REACT_APP_SERVER_URL ||
-        window.location.protocol +
-          '//' +
-          window.location.hostname +
-          ':' +
-          (window.location.port || '5001');
+      let serverUrl;
+
+      // Check if we're accessing VPS (has srv512766.hstgr.cloud in URL)
+      if (window.location.hostname.includes('srv512766.hstgr.cloud')) {
+        // VPS mode - use the same hostname but port 5001
+        serverUrl = `${window.location.protocol}//${window.location.hostname}:5001`;
+      } else if (
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1'
+      ) {
+        // Local mode - use localhost:5001
+        serverUrl = process.env.REACT_APP_SERVER_URL || 'http://localhost:5001';
+      } else {
+        // Fallback - use current hostname with port 5001
+        serverUrl =
+          process.env.REACT_APP_SERVER_URL ||
+          window.location.protocol +
+            '//' +
+            window.location.hostname +
+            ':' +
+            (window.location.port || '5001');
+      }
+
+      console.log('Socket connecting to:', serverUrl);
 
       const newSocket = io(serverUrl, {
         auth: {
@@ -47,8 +98,18 @@ export const SocketProvider = ({ children }) => {
       });
 
       newSocket.on('connect', () => {
-        console.log('Connected to server');
+        console.log('✅ Socket connected to server:', serverUrl);
         setConnected(true);
+        setIsConnecting(false);
+        setConnectionAttempts(0);
+
+        // Only show success toast after reconnection attempts
+        if (connectionAttempts > 0) {
+          showDebouncedToast('Reconnected to server', 'success', 500);
+        } else {
+          // Don't show toast on initial connection to avoid spam
+          console.log('Connected to server');
+        }
 
         // Join user-specific room
         newSocket.emit('join_room', `user_${user.id}`);
@@ -58,31 +119,66 @@ export const SocketProvider = ({ children }) => {
       });
 
       newSocket.on('disconnect', (reason) => {
-        console.log('Disconnected from server:', reason);
+        console.log('❌ Socket disconnected from server:', reason);
         setConnected(false);
+        setIsConnecting(false);
+
+        // Only show disconnect toast if it's not a normal page reload
+        if (reason !== 'io client disconnect') {
+          showDebouncedToast('Connection lost', 'error', 1000);
+        }
       });
 
       newSocket.on('connect_error', (error) => {
-        console.error('Socket connection error:', error);
+        console.error('❌ Socket connection error:', error);
         setConnected(false);
+        setIsConnecting(false);
+        setConnectionAttempts((prev) => prev + 1);
+
+        // Only show error toast after multiple failed attempts
+        if (connectionAttempts >= 3) {
+          showDebouncedToast(
+            `Connection failed: ${error.message}`,
+            'error',
+            2000,
+          );
+        }
       });
 
       newSocket.on('reconnect', (attemptNumber) => {
-        console.log('Reconnected to server after', attemptNumber, 'attempts');
+        console.log('🔄 Socket reconnected after', attemptNumber, 'attempts');
         setConnected(true);
+        setIsConnecting(false);
+        setConnectionAttempts(0);
+        showDebouncedToast('Reconnected to server', 'success', 500);
       });
 
       newSocket.on('reconnect_attempt', (attemptNumber) => {
-        console.log('Reconnection attempt:', attemptNumber);
+        console.log('🔄 Socket reconnection attempt:', attemptNumber);
+        setIsConnecting(true);
+        setConnectionAttempts(attemptNumber);
+
+        // Only show loading toast for first few attempts
+        if (attemptNumber <= 2) {
+          showDebouncedToast(
+            `Reconnecting... (${attemptNumber})`,
+            'loading',
+            500,
+          );
+        }
       });
 
       newSocket.on('reconnect_error', (error) => {
-        console.error('Reconnection error:', error);
+        console.error('❌ Socket reconnection error:', error);
+        setIsConnecting(false);
+        // Don't show error toast for every attempt, only after multiple failures
       });
 
       newSocket.on('reconnect_failed', () => {
-        console.error('Failed to reconnect to server');
+        console.error('❌ Failed to reconnect to server');
         setConnected(false);
+        setIsConnecting(false);
+        showDebouncedToast('Connection lost permanently', 'error', 1000);
       });
 
       // Real-time event handlers
@@ -154,11 +250,18 @@ export const SocketProvider = ({ children }) => {
       setSocket(newSocket);
 
       return () => {
+        console.log('Cleaning up socket connection on unmount');
+        if (toastTimeoutRef.current) {
+          clearTimeout(toastTimeoutRef.current);
+        }
         newSocket.close();
+        setSocket(null);
+        setConnected(false);
       };
     } else {
       // Clean up socket when user logs out
       if (socket) {
+        console.log('Cleaning up socket connection on logout');
         socket.close();
         setSocket(null);
         setConnected(false);
